@@ -323,8 +323,8 @@ def generate_numbers_no_digits(prohibited_symbols, max_len):
 
 def add_unaries(all_exprs, allowed_unaries, max_len, recursive=True):
     added = False
-
-    for expr in all_exprs.copy().values():
+    new = []
+    for expr in all_exprs.values():
         candidates = []
         if '-' in allowed_unaries:
             candidates.append(Negative.create(expr))
@@ -335,8 +335,11 @@ def add_unaries(all_exprs, allowed_unaries, max_len, recursive=True):
                 continue
             curr = all_exprs.get(candidate.result)
             if curr is None or candidate.len < curr.len:
-                all_exprs[candidate.result] = candidate
+                new.append(candidate)
                 added = True
+
+    for new_expr in new:
+        all_exprs[new_expr.result] = new_expr
 
     if added and recursive:
         # TODO can be much faster, stop copying everything
