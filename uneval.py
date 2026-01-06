@@ -273,8 +273,6 @@ def generate_numbers(allowed_digits, dot_allowed, max_len):
             if digits[0] == '0':
                 continue
             num = Number(int(''.join(digits)))
-            if num.len > max_num_len:
-                continue
             result[num] = num
 
     if dot_allowed:
@@ -366,7 +364,7 @@ def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
     for n in all_numbers:
         all_exprs[n] = n
     # Note: recursing eats a lot of throughput. Should be used as a fallback or until I optimize it
-    recurse = level>30
+    recurse = level > 30
     add_unaries(all_exprs, allowed_unaries, max_len, recursive=recurse)
 
     for n in all_exprs:
@@ -390,7 +388,7 @@ def expression_generators(allowed_b_ops):
 
     def maybe_add(cls):
         nonlocal expr_gens
-        expr_gens.append(lambda e1, e2: cls.create(e1, e2))
+        expr_gens.append(cls)
 
     for op in allowed_b_ops:
         match op:
@@ -465,10 +463,17 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
 
     return None
 
+def create_binary_expression(cls, left, right, max_len):
+    if left.len + right.len + 1 > max_len:
+        return None
+    result = cls.create(left, right)
+    if result and result.len <= max_len:
+        return result
+    return None
 
 def bruteforce_expressions(all_exprs: dict[Expression, Expression],
                            from_prev_step: dict[Expression, Expression],
-                           expr_gens: list[lambda n1, n2: Expression],
+                           expr_gens,
                            allowed_b_ops,
                            allowed_u_ops,
                            recurse_for_unaries,
@@ -480,13 +485,10 @@ def bruteforce_expressions(all_exprs: dict[Expression, Expression],
     new_exprs = {}
     for n1 in exprs_copy:
         for n2 in exprs_copy:
-            for expr_gen in expr_gens:
-                expr = expr_gen(n1, n2)
+            for cls in expr_gens:
+                expr = create_binary_expression(cls, n1, n2, max_len)
                 if expr is None:
                     continue
-                if expr.len > max_len:
-                    continue
-
                 res = expr.result
                 if res == target:
                     return expr
@@ -499,7 +501,6 @@ def bruteforce_expressions(all_exprs: dict[Expression, Expression],
                 if curr is None or expr.len < curr.len:
                     populated = True
                     all_exprs[expr] = expr
-                    new_exprs[expr] = expr
                     e = find_complement(expr, target, allowed_b_ops, all_exprs, max_len)
                     if e is not None:
                         return e
@@ -517,8 +518,6 @@ def main():
     batch_times = []
 
     for level, line in enumerate(lines, start=1):
-        # if (level < 40 or level > 50):
-        #     continue
         parts = line.rstrip('\n').split(' ', maxsplit=2)
         target = int(parts[0])
         max_len = int(parts[1])
