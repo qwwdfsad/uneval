@@ -87,7 +87,7 @@ class UnaryExpression(Expression):
     def create(cls, expression):
         if isinstance(expression.result, float):
             return None
-        if isinstance(expression, UnaryExpression) or isinstance(expression, Number):
+        if isinstance(expression, (UnaryExpression, Number)):
             return cls(expression)
         return cls(Parenthesized.create(expression))
 
@@ -277,7 +277,7 @@ def generate_numbers(allowed_digits, dot_allowed, max_len):
             if num.len > max_num_len - 2:
                 continue
             for d in allowed_digits:
-                if d == 0:
+                if d == '0':
                     continue
                 fl = Number(float(num.repr + "." + d))
                 if fl not in result:
@@ -464,7 +464,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
     return None
 
 def create_binary_expression(cls, left, right, max_len):
-    if left.len + right.len + 1 > max_len:
+    if left.len + right.len + len(cls.op) > max_len:
         return None
     result = cls.create(left, right)
     if result and result.len <= max_len:
