@@ -12,11 +12,12 @@ brackets = ['(', ')']
 
 
 class Expression:
-    __slots__ = ('result', 'repr', 'len', 'precedence')
+    __slots__ = ('result', 'repr', 'len', 'precedence', 'is_int')
     result: int
     repr: str
     len: int
     precedence: int
+    is_int: bool
 
     def __str__(self):
         return self.repr
@@ -42,6 +43,7 @@ class BinaryOp(Expression):
         self.repr = f"{left}{self.op}{right}"
         self.result = self._compute(left.result, right.result)
         self.len = len(self.repr)
+        self.is_int = left.is_int and right.is_int
 
     @classmethod
     def create(cls, left, right):
@@ -73,9 +75,10 @@ class UnaryExpression(Expression):
     precedence: int = 100
 
     def __init__(self, expression):
-        self.repr = self.op + str(expression)
+        self.repr = self.op + expression.repr
         self.result = self._compute(expression.result)
         self.len = len(self.repr)
+        self.is_int = expression.is_int
 
     def inv(self):
         return Inv.create(self)
@@ -85,9 +88,9 @@ class UnaryExpression(Expression):
 
     @classmethod
     def create(cls, expression):
-        if isinstance(expression.result, float):
+        if not expression.is_int:
             return None
-        if isinstance(expression, (UnaryExpression, Number)):
+        if expression.precedence == 100:  # Number, UnaryExpression, or Parenthesized
             return cls(expression)
         return cls(Parenthesized.create(expression))
 
@@ -97,9 +100,10 @@ class Parenthesized(Expression):
     precedence = 100
 
     def __init__(self, inner):
-        self.repr = "(" + str(inner) + ")"
+        self.repr = "(" + inner.repr + ")"
         self.result = inner.result
         self.len = len(self.repr)
+        self.is_int = inner.is_int
 
     def create(inner):
         return Parenthesized(inner) if inner is not None else None
@@ -124,8 +128,9 @@ class Number(UnaryExpression):
 
     def __init__(self, num):
         self.result = num
-        self.len = len(str(num))
         self.repr = str(num)
+        self.len = len(self.repr)
+        self.is_int = isinstance(num, int)
 
     @classmethod
     def hex(cls, string):
@@ -168,7 +173,7 @@ class Pow(BinaryOp):
     def is_valid(cls, left, right):
         l = left.result
         r = right.result
-        return isinstance(l, int) and isinstance(r, int) and l > 0 and r > 0 and l < 100 and r < 100
+        return left.is_int and right.is_int and l > 0 and r > 0 and l < 100 and r < 100
 
     def _compute(self, left, right): return left ** right
 
@@ -213,7 +218,7 @@ class Shl(BinaryOp):
 
     @classmethod
     def is_valid(cls, left, right):
-        return isinstance(right.result, int) and isinstance(left.result, int) and 0 < right.result < 16
+        return left.is_int and right.is_int and 0 < right.result < 16
 
     def _compute(self, left, right): return left << right
 
@@ -224,7 +229,7 @@ class Shr(BinaryOp):
 
     @classmethod
     def is_valid(cls, left, right):
-        return isinstance(right.result, int) and isinstance(left.result, int) and 0 < right.result < 16
+        return left.is_int and right.is_int and 0 < right.result < 16
 
     def _compute(self, left, right): return left >> right
 
@@ -235,7 +240,7 @@ class And(BinaryOp):
 
     @classmethod
     def is_valid(cls, left, right):
-        return isinstance(right.result, int) and isinstance(left.result, int)
+        return left.is_int and right.is_int
 
     def _compute(self, left, right): return left & right
 
@@ -246,7 +251,7 @@ class Xor(BinaryOp):
 
     @classmethod
     def is_valid(cls, left, right):
-        return isinstance(right.result, int) and isinstance(left.result, int)
+        return left.is_int and right.is_int
 
     def _compute(self, left, right): return left ^ right
 
@@ -257,7 +262,7 @@ class Or(BinaryOp):
 
     @classmethod
     def is_valid(cls, left, right):
-        return isinstance(right.result, int) and isinstance(left.result, int)
+        return left.is_int and right.is_int
 
     def _compute(self, left, right): return left | right
 
@@ -438,7 +443,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
 
     # Mul: target = n1 * n2 -> n2 = target / n1
     if '*' in allowed_ops and n1.result != 0:
-        if isinstance(n1.result, int) and target % n1.result == 0:
+        if n1.is_int and target % n1.result == 0:
             needed = target // n1.result
             if needed in all_exprs:
                 expr = Multiplication.create(n1, all_exprs[needed])
@@ -446,7 +451,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
                     return expr
 
     # IntDiv: target = n1 // n2 -> n2 = n1 // target
-    if '//' in allowed_ops and target > 0 and isinstance(n1.result, int) and n1.result > 0:
+    if '//' in allowed_ops and target > 0 and n1.is_int and n1.result > 0:
         approx = n1.result // target
         for delta in range(-1, 2):
             needed = approx + delta
@@ -456,7 +461,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
                     return expr
 
     # Xor: target = n1 ^ n2 -> n2 = target ^ n1
-    if '^' in allowed_ops and isinstance(n1.result, int):
+    if '^' in allowed_ops and n1.is_int:
         needed = target ^ n1.result
         if needed in all_exprs:
             expr = Xor.create(n1, all_exprs[needed])
@@ -495,7 +500,7 @@ def bruteforce_expressions(all_exprs: dict[int|float, Expression],
                 # Prune probable offender
                 if res > target * 100:
                     continue
-                if isinstance(res, float) and res * 10 != int(res * 10):
+                if not expr.is_int and res * 10 != int(res * 10):
                     continue
                 curr = all_exprs.get(expr.result)
                 if curr is None or expr.len < curr.len:
