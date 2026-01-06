@@ -333,9 +333,9 @@ def add_unaries(all_exprs, allowed_unaries, max_len, recursive=True):
         for candidate in candidates:
             if candidate is None or candidate.len > max_len:
                 continue
-            curr = all_exprs.get(candidate)
+            curr = all_exprs.get(candidate.result)
             if curr is None or candidate.len < curr.len:
-                all_exprs[candidate] = candidate
+                all_exprs[candidate.result] = candidate
                 added = True
 
     if added and recursive:
@@ -362,12 +362,12 @@ def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
 
     all_exprs = {}
     for n in all_numbers:
-        all_exprs[n] = n
+        all_exprs[n.result] = n
     # Note: recursing eats a lot of throughput. Should be used as a fallback or until I optimize it
     recurse = level > 30
     add_unaries(all_exprs, allowed_unaries, max_len, recursive=recurse)
 
-    for n in all_exprs:
+    for n in all_exprs.values():
         if n.result == target:
             return n
 
@@ -379,7 +379,7 @@ def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
         if e is not None:
             return e
 
-    result = bruteforce_expressions(all_exprs, all_exprs, expr_gens, allowed_b_ops, allowed_unaries, recurse, max_len, target)
+    result = bruteforce_expressions(all_exprs, expr_gens, allowed_b_ops, allowed_unaries, recurse, max_len, target)
     return result
 
 
@@ -420,7 +420,7 @@ def expression_generators(allowed_b_ops):
 def find_complement(n1, target, allowed_ops, all_exprs, max_len):
     # Add: target = n1 + n2 -> n2 = target - n1
     if '+' in allowed_ops:
-        needed = Number(target - n1.result)
+        needed = target - n1.result
         if needed in all_exprs:
             expr = Addition.create(n1, all_exprs[needed])
             if expr and expr.len <= max_len and expr.result == target:
@@ -428,7 +428,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
 
     # Sub: target = n1 - n2 -> n2 = n1 - target
     if '-' in allowed_ops:
-        needed = Number(n1.result - target)
+        needed = n1.result - target
         if needed in all_exprs:
             expr = Subtraction.create(n1, all_exprs[needed])
             if expr and expr.len <= max_len and expr.result == target:
@@ -437,7 +437,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
     # Mul: target = n1 * n2 -> n2 = target / n1
     if '*' in allowed_ops and n1.result != 0:
         if isinstance(n1.result, int) and target % n1.result == 0:
-            needed = Number(target // n1.result)
+            needed = target // n1.result
             if needed in all_exprs:
                 expr = Multiplication.create(n1, all_exprs[needed])
                 if expr and expr.len <= max_len and expr.result == target:
@@ -445,17 +445,17 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
 
     # IntDiv: target = n1 // n2 -> n2 = n1 // target
     if '//' in allowed_ops and target > 0 and isinstance(n1.result, int) and n1.result > 0:
-        approx = Number(n1.result // target)
+        approx = n1.result // target
         for delta in range(-1, 2):
-            needed = Number(approx.result + delta)
-            if needed.result > 0 and needed in all_exprs:
+            needed = approx + delta
+            if needed > 0 and needed in all_exprs:
                 expr = IntDiv.create(n1, all_exprs[needed])
                 if expr and expr.len <= max_len and expr.result == target:
                     return expr
 
     # Xor: target = n1 ^ n2 -> n2 = target ^ n1
     if '^' in allowed_ops and isinstance(n1.result, int):
-        needed = Number(target ^ n1.result)
+        needed = target ^ n1.result
         if needed in all_exprs:
             expr = Xor.create(n1, all_exprs[needed])
             if expr and expr.len <= max_len and expr.result == target:
@@ -471,8 +471,7 @@ def create_binary_expression(cls, left, right, max_len):
         return result
     return None
 
-def bruteforce_expressions(all_exprs: dict[Expression, Expression],
-                           from_prev_step: dict[Expression, Expression],
+def bruteforce_expressions(all_exprs: dict[int|float, Expression],
                            expr_gens,
                            allowed_b_ops,
                            allowed_u_ops,
@@ -497,16 +496,16 @@ def bruteforce_expressions(all_exprs: dict[Expression, Expression],
                     continue
                 if isinstance(res, float) and res * 10 != int(res * 10):
                     continue
-                curr = all_exprs.get(expr)
+                curr = all_exprs.get(expr.result)
                 if curr is None or expr.len < curr.len:
                     populated = True
-                    all_exprs[expr] = expr
+                    all_exprs[expr.result] = expr
                     e = find_complement(expr, target, allowed_b_ops, all_exprs, max_len)
                     if e is not None:
                         return e
 
     if populated:
-        return bruteforce_expressions(all_exprs, new_exprs, expr_gens, allowed_b_ops, allowed_u_ops, recurse_for_unaries, max_len, target)
+        return bruteforce_expressions(all_exprs, expr_gens, allowed_b_ops, allowed_u_ops, recurse_for_unaries, max_len, target)
     return None
 
 def main():
