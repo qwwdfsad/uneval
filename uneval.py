@@ -18,9 +18,6 @@ class Expression:
     len: int
     precedence: int
 
-    def eval(self):
-        return self.result
-
     def __str__(self):
         return self.repr
 
@@ -42,8 +39,8 @@ class BinaryOp(Expression):
     op: str = ""
 
     def __init__(self, left, right):
-        self.repr = str(left) + self.op + str(right)
-        self.result = self._compute(left.eval(), right.eval())
+        self.repr = f"{left}{self.op}{right}"
+        self.result = self._compute(left.result, right.result)
         self.len = len(self.repr)
 
     @classmethod
@@ -77,7 +74,7 @@ class UnaryExpression(Expression):
 
     def __init__(self, expression):
         self.repr = self.op + str(expression)
-        self.result = self._compute(expression.eval())
+        self.result = self._compute(expression.result)
         self.len = len(self.repr)
 
     def inv(self):
@@ -101,7 +98,7 @@ class Parenthesized(Expression):
 
     def __init__(self, inner):
         self.repr = "(" + str(inner) + ")"
-        self.result = inner.eval()
+        self.result = inner.result
         self.len = len(self.repr)
 
     def create(inner):
@@ -349,8 +346,8 @@ def add_unaries(all_exprs, allowed_unaries, max_len, recursive=True):
 def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
     allowed_digits = set(filter(lambda x: x not in prohibited_symbols, all_digits))
     allowed_hex = set(filter(lambda x: x not in prohibited_symbols, all_hex))
-    allowed_unaries = list(filter(lambda x: x not in prohibited_symbols, unary_ops))
-    allowed_b_ops = list(filter(lambda x: all(ch not in prohibited_symbols for ch in x), binary_ops))
+    allowed_unaries = set(filter(lambda x: x not in prohibited_symbols, unary_ops))
+    allowed_b_ops = set(filter(lambda x: all(ch not in prohibited_symbols for ch in x), binary_ops))
     dot_allowed = '.' not in prohibited_symbols
 
     if level < 20:  # Classic bruteforce
@@ -484,7 +481,6 @@ def bruteforce_expressions(all_exprs: dict[int|float, Expression],
 
     add_unaries(all_exprs, allowed_u_ops, max_len, recurse_for_unaries)
     exprs_copy = list(all_exprs.values())
-    new_exprs = {}
     for n1 in exprs_copy:
         for n2 in exprs_copy:
             for cls in expr_gens:
