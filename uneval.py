@@ -319,28 +319,30 @@ def generate_numbers_no_digits(prohibited_symbols, max_len):
 
 
 def add_unaries(all_exprs, allowed_unaries, max_len, recursive=True):
-    added = False
-    new = []
-    for expr in all_exprs.values():
-        candidates = []
-        if '-' in allowed_unaries:
-            candidates.append(Negative.create(expr))
-        if '~' in allowed_unaries:
-            candidates.append(Inv.create(expr))
-        for candidate in candidates:
-            if candidate is None or candidate.len > max_len:
-                continue
-            curr = all_exprs.get(candidate.result)
-            if curr is None or candidate.len < curr.len:
-                new.append(candidate)
-                added = True
+    to_process = list(all_exprs.values())
+    has_neg = '-' in allowed_unaries
+    has_inv = '~' in allowed_unaries
 
-    for new_expr in new:
-        all_exprs[new_expr.result] = new_expr
-
-    if added and recursive:
-        # TODO can be much faster, stop copying everything
-        add_unaries(all_exprs, allowed_unaries, max_len, recursive)
+    while to_process:
+        new = []
+        for expr in to_process:
+            if has_neg:
+                c = Negative.create(expr)
+                if c and c.len <= max_len:
+                    curr = all_exprs.get(c.result)
+                    if curr is None or c.len < curr.len:
+                        all_exprs[c.result] = c
+                        new.append(c)
+            if has_inv:
+                c = Inv.create(expr)
+                if c and c.len <= max_len:
+                    curr = all_exprs.get(c.result)
+                    if curr is None or c.len < curr.len:
+                        all_exprs[c.result] = c
+                        new.append(c)
+        if not recursive:
+            break
+        to_process = new
 
 
 def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
@@ -464,7 +466,7 @@ def find_complement(n1, target, allowed_ops, all_exprs, max_len):
     return None
 
 def create_binary_expression(cls, left, right, max_len):
-    if left.len + right.len + len(cls.op) > max_len:
+    if left.len + right.len + 1 > max_len: # Note: len(cls.op) is actually slower. Should figure this one out
         return None
     result = cls.create(left, right)
     if result and result.len <= max_len:
