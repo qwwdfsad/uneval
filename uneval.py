@@ -370,7 +370,7 @@ def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
     all_exprs = {}
     for n in all_numbers:
         all_exprs[n.result] = n
-    # Note: recursing eats a lot of throughput. Should be used as a fallback or until I optimize it
+    # Note: recursing eats a lot (~25sec vs 14sec) of throughput. Should be used as a fallback or until I optimize it
     recurse = level > 30
     add_unaries(all_exprs, allowed_unaries, max_len, recursive=recurse)
 
@@ -380,7 +380,7 @@ def solve(target: int, level: int, prohibited_symbols: set[str], max_len: int):
 
     expr_gens = expression_generators(allowed_b_ops)
 
-    # Fast-path for hexes mostly
+    # Fast-path, mostly for hexes
     for n in all_numbers:
         e = find_complement(n, target, allowed_b_ops, all_exprs, max_len)
         if e is not None:
@@ -423,7 +423,7 @@ def expression_generators(allowed_b_ops):
     return expr_gens
 
 
-# Basic meet-in-the-middle?
+# Basic meet-in-the-middle. TODO: other ops
 def find_complement(n1, target, allowed_ops, all_exprs, max_len):
     # Add: target = n1 + n2 -> n2 = target - n1
     if '+' in allowed_ops:
@@ -487,28 +487,37 @@ def bruteforce_expressions(all_exprs: dict[int|float, Expression],
     populated = False
 
     add_unaries(all_exprs, allowed_u_ops, max_len, recurse_for_unaries)
-    exprs_copy = list(all_exprs.values())
-    for n1 in exprs_copy:
-        for n2 in exprs_copy:
-            for cls in expr_gens:
-                expr = create_binary_expression(cls, n1, n2, max_len)
-                if expr is None:
-                    continue
-                res = expr.result
-                if res == target:
-                    return expr
-                # Prune probable offender
-                if res > target * 100:
-                    continue
-                if not expr.is_int and res * 10 != int(res * 10):
-                    continue
-                curr = all_exprs.get(expr.result)
-                if curr is None or expr.len < curr.len:
-                    populated = True
-                    all_exprs[expr.result] = expr
-                    e = find_complement(expr, target, allowed_b_ops, all_exprs, max_len)
-                    if e is not None:
-                        return e
+    sized_exprs = [[] for _ in range(max_len + 1)]
+    for expr in all_exprs.values():
+        sized_exprs[expr.len].append(expr)
+
+    # Lenght-matching: do not even try to match expressions which lengths are larger than the limit
+    for left_len, lexprs in enumerate(sized_exprs):
+        max_right_len = max_len - left_len - 1
+        for right_len, rexprs in enumerate(sized_exprs):
+            if right_len > max_right_len:
+                break
+            for n1 in lexprs:
+                for n2 in rexprs:
+                    for cls in expr_gens:
+                        expr = create_binary_expression(cls, n1, n2, max_len)
+                        if expr is None:
+                            continue
+                        res = expr.result
+                        if res == target:
+                            return expr
+                        # Prune likely offender
+                        if res > target * 100:
+                            continue
+                        if not expr.is_int and res * 10 != int(res * 10):
+                            continue
+                        curr = all_exprs.get(expr.result)
+                        if curr is None or expr.len < curr.len:
+                            populated = True
+                            all_exprs[expr.result] = expr
+                            e = find_complement(expr, target, allowed_b_ops, all_exprs, max_len)
+                            if e is not None:
+                                return e
 
     if populated:
         return bruteforce_expressions(all_exprs, expr_gens, allowed_b_ops, allowed_u_ops, recurse_for_unaries, max_len, target)
