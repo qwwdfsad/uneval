@@ -18,4 +18,4 @@ It's optimized a bit more than it should've been, but it's kind of the point.
 Optimizations:
 * Meet-in-the-middle (basically, for any already existing expression, try to find a complement one amongst already existing)
 * Some length/value-based branch-and-bound pruning
-* `isinstance` avoidane because it is unreasonably slow even for union types
+* `isinstance` avoidance because it is unreasonably slow even for union types
